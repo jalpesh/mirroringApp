@@ -2,9 +2,7 @@ package com.example.mirroringapp.mirroring
 
 import android.app.Application
 import android.content.Intent
-import android.hardware.display.DisplayManager
 import android.media.projection.MediaProjectionManager
-import android.os.Build
 
 class MirroringIntentFactory(private val app: Application) {
 
