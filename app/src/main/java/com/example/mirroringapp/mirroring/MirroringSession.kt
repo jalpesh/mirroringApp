@@ -86,15 +86,28 @@ class MirroringSession(
     }
 
     private fun configureTargetDimensions(metrics: DisplayMetrics, display: Display?) {
-        targetWidth = display?.mode?.physicalWidth ?: metrics.widthPixels
-        targetHeight = display?.mode?.physicalHeight ?: metrics.heightPixels
-        targetDensity = display?.let { DisplayMetrics.DENSITY_DEFAULT } ?: metrics.densityDpi
-        if (display != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            val bestMode = display.supportedModes.maxByOrNull { it.refreshRate }
-            if (bestMode != null) {
-                targetWidth = bestMode.physicalWidth
-                targetHeight = bestMode.physicalHeight
+        if (display != null) {
+            val displayMetrics = runCatching {
+                context.createDisplayContext(display).resources.displayMetrics
+            }.getOrDefault(metrics)
+
+            targetWidth = displayMetrics.widthPixels.takeIf { it > 0 } ?: metrics.widthPixels
+            targetHeight = displayMetrics.heightPixels.takeIf { it > 0 } ?: metrics.heightPixels
+            targetDensity = displayMetrics.densityDpi.takeIf { it > 0 } ?: metrics.densityDpi
+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                val bestMode = display.supportedModes
+                    .filter { it.modeId == display.mode.modeId || it.refreshRate >= display.refreshRate }
+                    .maxByOrNull { it.refreshRate }
+                if (bestMode != null) {
+                    targetWidth = bestMode.physicalWidth
+                    targetHeight = bestMode.physicalHeight
+                }
             }
+        } else {
+            targetWidth = metrics.widthPixels
+            targetHeight = metrics.heightPixels
+            targetDensity = metrics.densityDpi
         }
     }
 
