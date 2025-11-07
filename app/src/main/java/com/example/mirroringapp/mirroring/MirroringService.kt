@@ -49,6 +49,9 @@ class MirroringService : Service() {
         val lowLatency = intent.getBooleanExtra(EXTRA_LOW_LATENCY, true)
         val hardwareEncoder = intent.getBooleanExtra(EXTRA_HARDWARE_ENCODER, true)
 
+        // CRITICAL: Start foreground service BEFORE creating MediaProjection (Android 10+ requirement)
+        startForeground(NOTIFICATION_ID, buildNotification(connectionOption))
+
         val projectionManager = getSystemService(MediaProjectionManager::class.java) ?: return
         val mediaProjection = projectionManager.getMediaProjection(resultCode, projectionData) ?: return
         session?.stop()
@@ -61,8 +64,6 @@ class MirroringService : Service() {
         ).also { session ->
             session.start()
         }
-
-        startForeground(NOTIFICATION_ID, buildNotification(connectionOption))
     }
 
     private fun stopMirroring() {
