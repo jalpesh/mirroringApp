@@ -7,6 +7,7 @@ A fast screen mirroring controller that prioritises USB-C / DisplayPort Alt Mode
 - **USB-C first**: Detects external HDMI/DisplayPort displays, spins up a dedicated `Presentation` hosted `TextureView`, and pipes `MediaProjection` frames straight into the HDMI sink for the lowest possible latency.
 - **Wireless fallbacks**: Includes placeholders for Wi-Fi Direct and Miracast to compare throughput and latency trade-offs without rebuilding the app.
 - **Low-latency tuning**: Switches to two-buffer virtual display pipelines, trusted display flags on Android 13+, and hardware-encoder hints for reduced end-to-end delay, now backed by a background `HandlerThread` to drain buffers promptly.
+- **Performance telemetry**: Streams frame cadence and FPS statistics to logcat so you can validate latency gains on devices like the Moto G6.
 - **Foreground mirroring service**: Keeps the projection alive even when the app goes to the background.
 - **DataStore-backed preferences**: Remembers the last connection profile and performance toggles.
 - **Jetpack Compose UI**: Simple interface optimised for one-hand operation while connecting cables.
@@ -23,14 +24,18 @@ mirroringApp/
     │   ├── AndroidManifest.xml
     │   ├── java/com/example/mirroringapp/
     │   │   ├── MainActivity.kt
+    │   │   ├── MirroringUiState.kt
     │   │   ├── MirroringViewModel.kt
-    │   │   └── mirroring/
-    │   │       ├── ConnectionOption.kt
-    │   │       ├── ExternalDisplayReceiver.kt
-    │   │       ├── MirroringController.kt
-    │   │       ├── MirroringIntentFactory.kt
-    │   │       ├── MirroringService.kt
-    │   │       └── MirroringSession.kt
+    │   │   ├── mirroring/
+    │   │   │   ├── ConnectionOption.kt
+    │   │   │   ├── ExternalDisplayReceiver.kt
+    │   │   │   ├── MirroringController.kt
+    │   │   │   ├── MirroringIntentFactory.kt
+    │   │   │   ├── MirroringService.kt
+    │   │   │   ├── MirroringSession.kt
+    │   │   │   └── VideoEncoder.kt
+    │   │   └── util/
+    │   │       └── PerformanceLogger.kt
     │   └── res/
     │       ├── values/...
     │       └── drawable/ic_stat_name.xml

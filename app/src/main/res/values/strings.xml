@@ -13,4 +13,12 @@
     <string name="external_display_disconnected">External display disconnected</string>
     <string name="request_projection_permission">Screen capture permission is required for mirroring.</string>
     <string name="permission_denied">Permission denied</string>
+    <string name="status_idle">Ready to mirror your display.</string>
+    <string name="status_requesting_permission">Awaiting screen capture permission…</string>
+    <string name="status_starting">Starting the mirroring session…</string>
+    <string name="status_mirroring">Mirroring active via %1$s</string>
+    <string name="error_projection_unavailable">Screen capture is not supported on this device.</string>
+    <string name="error_projection_permission_denied">Screen capture permission is required to start mirroring.</string>
+    <string name="error_start_mirroring_generic">Unable to start mirroring.</string>
+    <string name="error_start_mirroring_with_detail">Unable to start mirroring: %1$s</string>
 </resources>

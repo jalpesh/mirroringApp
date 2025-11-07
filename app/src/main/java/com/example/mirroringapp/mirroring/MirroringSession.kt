@@ -13,8 +13,10 @@ import android.os.Build
 import android.os.Handler
 import android.os.HandlerThread
 import android.util.DisplayMetrics
+import android.util.Log
 import android.view.Display
 import android.view.Surface
+import com.example.mirroringapp.util.PerformanceLogger
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -37,7 +39,10 @@ class MirroringSession(
     private var presentation: Presentation? = null
     private var activeSurface: Surface? = null
     private var handlerThread: HandlerThread? = null
+    private var videoEncoder: VideoEncoder? = null
     private var projectionStopped = false
+
+    private val performanceLogger = PerformanceLogger()
 
     private var targetWidth: Int = 0
     private var targetHeight: Int = 0
@@ -45,23 +50,36 @@ class MirroringSession(
 
     fun start() {
         projectionStopped = false
+        performanceLogger.reset()
         scope.launch {
             val metrics = context.resources.displayMetrics
             val targetDisplay = pickDisplay(connectionOption)
             configureTargetDimensions(metrics, targetDisplay)
 
-            if (connectionOption == ConnectionOption.USB_C && targetDisplay != null) {
-                withContext(Dispatchers.Main) {
-                    presentation = ExternalDisplayPresentation(
-                        context = context,
-                        display = targetDisplay,
-                        onSurfaceReady = ::onSurfaceReady,
-                        onSurfaceDestroyed = ::onSurfaceDestroyed
-                    ).also { it.show() }
+            when {
+                connectionOption == ConnectionOption.USB_C && targetDisplay != null -> {
+                    withContext(Dispatchers.Main) {
+                        presentation = ExternalDisplayPresentation(
+                            context = context,
+                            display = targetDisplay,
+                            onSurfaceReady = ::onSurfaceReady,
+                            onSurfaceDestroyed = ::onSurfaceDestroyed
+                        ).also { it.show() }
+                    }
                 }
-            } else {
-                val fallbackSurface = createFallbackSurface(targetWidth, targetHeight)
-                onSurfaceReady(fallbackSurface)
+                connectionOption != ConnectionOption.USB_C && hardwareEncoder -> {
+                    val encoderSurface = prepareVideoEncoder()
+                    if (encoderSurface != null) {
+                        onSurfaceReady(encoderSurface)
+                    } else {
+                        val fallbackSurface = createFallbackSurface(targetWidth, targetHeight)
+                        onSurfaceReady(fallbackSurface)
+                    }
+                }
+                else -> {
+                    val fallbackSurface = createFallbackSurface(targetWidth, targetHeight)
+                    onSurfaceReady(fallbackSurface)
+                }
             }
         }
     }
@@ -70,6 +88,7 @@ class MirroringSession(
         scope.launch {
             releaseVirtualDisplay()
             releaseSurface()
+            releaseVideoEncoder()
             imageReader?.close()
             imageReader = null
             handlerThread?.quitSafely()
@@ -82,6 +101,7 @@ class MirroringSession(
                 projection.stop()
                 projectionStopped = true
             }
+            performanceLogger.reset()
         }
     }
 
@@ -123,7 +143,10 @@ class MirroringSession(
         ).apply {
             ensureHandlerThread()
             setOnImageAvailableListener({ reader ->
-                reader.acquireLatestImage()?.close()
+                reader.acquireLatestImage()?.let { image ->
+                    performanceLogger.onFrame(image.timestamp)
+                    image.close()
+                }
             }, handlerThread?.looper?.let { Handler(it) })
         }
         return imageReader!!.surface
@@ -146,6 +169,7 @@ class MirroringSession(
             if (activeSurface == surface) {
                 releaseVirtualDisplay()
                 releaseSurface()
+                releaseVideoEncoder()
             }
         }
     }
@@ -172,7 +196,8 @@ class MirroringSession(
 
     private fun releaseSurface() {
         val surface = activeSurface
-        if (surface != null && surface != imageReader?.surface && surface.isValid) {
+        val encoderSurface = videoEncoder?.getInputSurface()
+        if (surface != null && surface != imageReader?.surface && surface != encoderSurface && surface.isValid) {
             surface.release()
         }
         activeSurface = null
@@ -201,5 +226,43 @@ class MirroringSession(
         return Build.VERSION.SDK_INT >= Build.VERSION_CODES.M &&
             context.checkSelfPermission(Manifest.permission.ADD_TRUSTED_DISPLAY) ==
             PackageManager.PERMISSION_GRANTED
+    }
+
+    private fun prepareVideoEncoder(): Surface? {
+        releaseVideoEncoder()
+        val bitrate = calculateBitrate()
+        val encoder = VideoEncoder(
+            width = targetWidth,
+            height = targetHeight,
+            bitrate = bitrate,
+            frameRate = 60,
+            iFrameIntervalSeconds = if (lowLatency) 1 else 2,
+            performanceLogger = performanceLogger
+        )
+        return runCatching {
+            encoder.prepare()
+            videoEncoder = encoder
+            encoder.getInputSurface()
+        }.onFailure { throwable ->
+            encoder.release()
+            performanceLogger.onError(throwable)
+            Log.e(TAG, "Falling back to ImageReader after encoder failure", throwable)
+        }.getOrNull()
+    }
+
+    private fun releaseVideoEncoder() {
+        videoEncoder?.release()
+        videoEncoder = null
+    }
+
+    private fun calculateBitrate(): Int {
+        val pixels = targetWidth.toLong() * targetHeight.toLong()
+        val multiplier = if (lowLatency) 2L else 4L
+        val candidate = pixels * 4L * multiplier
+        return candidate.coerceIn(2_000_000L, 40_000_000L).toInt()
+    }
+
+    companion object {
+        private const val TAG = "MirroringSession"
     }
 }

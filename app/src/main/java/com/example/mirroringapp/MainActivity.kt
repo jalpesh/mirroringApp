@@ -18,13 +18,19 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -65,6 +71,7 @@ fun MirroringScreen(viewModel: MirroringViewModel) {
     val context = LocalContext.current
     val uiState by viewModel.uiState.collectAsState()
     val scope = rememberCoroutineScope()
+    val snackbarHostState = remember { SnackbarHostState() }
     val projectionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
         if (result.resultCode == Activity.RESULT_OK && result.data != null) {
             val projectionData = result.data
@@ -84,72 +91,137 @@ fun MirroringScreen(viewModel: MirroringViewModel) {
         }
     }
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(24.dp),
-        verticalArrangement = Arrangement.Center,
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        Text(text = stringResource(id = R.string.latency_mode_title), style = MaterialTheme.typography.titleLarge)
-        Spacer(modifier = Modifier.height(16.dp))
-        Switch(
-            checked = uiState.lowLatencyEnabled,
-            onCheckedChange = {
-                scope.launch { viewModel.setLowLatencyEnabled(it) }
-            }
-        )
-        Text(text = stringResource(id = R.string.latency_mode_description), modifier = Modifier.padding(top = 8.dp))
-        Spacer(modifier = Modifier.height(24.dp))
-        Text(text = stringResource(id = R.string.use_hardware_encoder))
-        Switch(
-            checked = uiState.hardwareEncoderEnabled,
-            onCheckedChange = {
-                scope.launch { viewModel.setHardwareEncoderEnabled(it) }
-            }
-        )
-        Spacer(modifier = Modifier.height(24.dp))
-
-        ConnectionOption.values().forEach { option ->
-            val isSelected = uiState.connectionOption == option
-            Button(
-                onClick = {
-                    scope.launch { viewModel.setConnectionOption(option) }
-                },
-                modifier = Modifier.padding(vertical = 4.dp),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
-                    contentColor = if (isSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            ) {
-                Text(text = when (option) {
-                    ConnectionOption.USB_C -> stringResource(id = R.string.usb_c_option)
-                    ConnectionOption.WIFI_DIRECT -> stringResource(id = R.string.wifi_direct_option)
-                    ConnectionOption.MIRACAST -> stringResource(id = R.string.miracast_option)
-                })
-            }
+    LaunchedEffect(uiState.status) {
+        val status = uiState.status
+        if (status is MirroringStatus.Error) {
+            snackbarHostState.showSnackbar(status.message)
+            viewModel.clearError()
         }
-        Spacer(modifier = Modifier.height(32.dp))
+    }
 
-        val startStopLabel = if (uiState.isMirroring) R.string.stop_mirroring else R.string.start_mirroring
-        Button(onClick = {
-            scope.launch {
-                if (uiState.isMirroring) {
-                    viewModel.stopMirroring()
-                } else {
-                    val permissionStatus = ContextCompat.checkSelfPermission(
-                        context,
-                        Manifest.permission.FOREGROUND_SERVICE
+    val status = uiState.status
+    val preferences = uiState.preferences
+    val controlsEnabled = status !is MirroringStatus.Starting && status !is MirroringStatus.RequestingPermission
+    val isMirroring = status is MirroringStatus.Mirroring
+
+    Scaffold(
+        snackbarHost = { SnackbarHost(snackbarHostState) }
+    ) { padding ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
+                .padding(24.dp),
+            verticalArrangement = Arrangement.Center,
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Text(
+                text = stringResource(id = R.string.latency_mode_title),
+                style = MaterialTheme.typography.titleLarge
+            )
+            Spacer(modifier = Modifier.height(16.dp))
+            Switch(
+                checked = preferences.lowLatencyEnabled,
+                onCheckedChange = {
+                    scope.launch { viewModel.setLowLatencyEnabled(it) }
+                },
+                enabled = controlsEnabled && !isMirroring
+            )
+            Text(
+                text = stringResource(id = R.string.latency_mode_description),
+                modifier = Modifier.padding(top = 8.dp)
+            )
+            Spacer(modifier = Modifier.height(24.dp))
+            Text(text = stringResource(id = R.string.use_hardware_encoder))
+            Switch(
+                checked = preferences.hardwareEncoderEnabled,
+                onCheckedChange = {
+                    scope.launch { viewModel.setHardwareEncoderEnabled(it) }
+                },
+                enabled = controlsEnabled && !isMirroring
+            )
+            Spacer(modifier = Modifier.height(24.dp))
+
+            ConnectionOption.values().forEach { option ->
+                val isSelected = preferences.connectionOption == option
+                Button(
+                    onClick = {
+                        scope.launch { viewModel.setConnectionOption(option) }
+                    },
+                    modifier = Modifier.padding(vertical = 4.dp),
+                    enabled = controlsEnabled && !isMirroring,
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = if (isSelected) {
+                            MaterialTheme.colorScheme.primary
+                        } else {
+                            MaterialTheme.colorScheme.surfaceVariant
+                        },
+                        contentColor = if (isSelected) {
+                            MaterialTheme.colorScheme.onPrimary
+                        } else {
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                        }
                     )
-                    if (permissionStatus == PackageManager.PERMISSION_GRANTED || Build.VERSION.SDK_INT < Build.VERSION_CODES.P) {
-                        viewModel.requestProjectionPermission(projectionLauncher::launch)
-                    } else {
-                        permissionLauncher.launch(Manifest.permission.FOREGROUND_SERVICE)
-                    }
+                ) {
+                    Text(text = option.toLabel())
                 }
             }
-        }) {
-            Text(text = stringResource(id = startStopLabel))
+            Spacer(modifier = Modifier.height(24.dp))
+
+            val statusText = when (status) {
+                MirroringStatus.Idle -> stringResource(id = R.string.status_idle)
+                MirroringStatus.RequestingPermission -> stringResource(id = R.string.status_requesting_permission)
+                MirroringStatus.Starting -> stringResource(id = R.string.status_starting)
+                is MirroringStatus.Mirroring -> stringResource(
+                    id = R.string.status_mirroring,
+                    status.connection.toLabel()
+                )
+                is MirroringStatus.Error -> status.message
+            }
+            Text(
+                text = statusText,
+                style = MaterialTheme.typography.bodyLarge,
+                modifier = Modifier.padding(vertical = 16.dp)
+            )
+
+            if (status is MirroringStatus.Starting || status is MirroringStatus.RequestingPermission) {
+                CircularProgressIndicator()
+                Spacer(modifier = Modifier.height(16.dp))
+            }
+
+            val startStopLabel = if (isMirroring) R.string.stop_mirroring else R.string.start_mirroring
+            Button(
+                onClick = {
+                    scope.launch {
+                        if (isMirroring) {
+                            viewModel.stopMirroring()
+                        } else {
+                            val permissionStatus = ContextCompat.checkSelfPermission(
+                                context,
+                                Manifest.permission.FOREGROUND_SERVICE
+                            )
+                            if (permissionStatus == PackageManager.PERMISSION_GRANTED || Build.VERSION.SDK_INT < Build.VERSION_CODES.P) {
+                                viewModel.requestProjectionPermission(projectionLauncher::launch)
+                            } else {
+                                permissionLauncher.launch(Manifest.permission.FOREGROUND_SERVICE)
+                            }
+                        }
+                    }
+                },
+                enabled = status !is MirroringStatus.RequestingPermission && status !is MirroringStatus.Starting
+            ) {
+                Text(text = stringResource(id = startStopLabel))
+            }
         }
     }
 }
+
+@Composable
+private fun ConnectionOption.toLabel(): String {
+    return when (this) {
+        ConnectionOption.USB_C -> stringResource(id = R.string.usb_c_option)
+        ConnectionOption.WIFI_DIRECT -> stringResource(id = R.string.wifi_direct_option)
+        ConnectionOption.MIRACAST -> stringResource(id = R.string.miracast_option)
+    }
+}
+
