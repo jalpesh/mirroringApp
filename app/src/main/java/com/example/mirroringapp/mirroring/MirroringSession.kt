@@ -1,13 +1,12 @@
 package com.example.mirroringapp.mirroring
 
 import android.content.Context
+import android.graphics.ImageFormat
 import android.graphics.PixelFormat
-import android.hardware.display.Display
 import android.hardware.display.DisplayManager
 import android.hardware.display.VirtualDisplay
 import android.media.ImageReader
 import android.media.projection.MediaProjection
-import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.util.DisplayMetrics
@@ -39,7 +38,7 @@ class MirroringSession(
             val height = targetDisplay?.mode?.physicalHeight ?: metrics.heightPixels
             val density = targetDisplay?.let { DisplayMetrics.DENSITY_DEFAULT } ?: metrics.densityDpi
 
-            val pixelFormat = if (hardwareEncoder) PixelFormat.RGBA_8888 else PixelFormat.RGB_565
+            val pixelFormat = if (hardwareEncoder) PixelFormat.RGBA_8888 else ImageFormat.RGB_565
             val maxImages = if (lowLatency) 2 else 4
             imageReader = ImageReader.newInstance(
                 width,
@@ -87,9 +86,6 @@ class MirroringSession(
         var flags = DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR or DisplayManager.VIRTUAL_DISPLAY_FLAG_PRESENTATION
         if (option != ConnectionOption.USB_C) {
             flags = flags or DisplayManager.VIRTUAL_DISPLAY_FLAG_OWN_CONTENT_ONLY
-        }
-        if (lowLatency && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            flags = flags or DisplayManager.VIRTUAL_DISPLAY_FLAG_TRUSTED
         }
         return flags
     }
