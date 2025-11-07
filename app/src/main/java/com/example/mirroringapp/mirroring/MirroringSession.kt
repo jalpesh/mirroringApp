@@ -1,7 +1,9 @@
 package com.example.mirroringapp.mirroring
 
+import android.Manifest
 import android.app.Presentation
 import android.content.Context
+import android.content.pm.PackageManager
 import android.graphics.PixelFormat
 import android.hardware.display.DisplayManager
 import android.hardware.display.VirtualDisplay
@@ -176,9 +178,15 @@ class MirroringSession(
         if (option != ConnectionOption.USB_C) {
             flags = flags or DisplayManager.VIRTUAL_DISPLAY_FLAG_OWN_CONTENT_ONLY
         }
-        if (lowLatency && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+        if (lowLatency && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && hasTrustedDisplayPermission()) {
             flags = flags or DisplayManager.VIRTUAL_DISPLAY_FLAG_TRUSTED
         }
         return flags
+    }
+
+    private fun hasTrustedDisplayPermission(): Boolean {
+        return Build.VERSION.SDK_INT >= Build.VERSION_CODES.M &&
+            context.checkSelfPermission(Manifest.permission.ADD_TRUSTED_DISPLAY) ==
+            PackageManager.PERMISSION_GRANTED
     }
 }
