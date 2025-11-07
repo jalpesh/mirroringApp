@@ -54,6 +54,9 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        
+        // Handle USB accessory attachment (suppress system dialog)
+        handleUsbAccessoryIntent(intent)
 
         setContent {
             MirroringAppTheme {
@@ -63,6 +66,19 @@ class MainActivity : ComponentActivity() {
                     MirroringScreen(viewModel = viewModel)
                 }
             }
+        }
+    }
+    
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        handleUsbAccessoryIntent(intent)
+    }
+    
+    private fun handleUsbAccessoryIntent(intent: Intent?) {
+        // Handle USB accessory attachment
+        if (intent?.action == "android.hardware.usb.action.USB_ACCESSORY_ATTACHED") {
+            // USB accessory detected - the app will handle display detection via DisplayManager
+            // No additional action needed here as Presentation API handles it automatically
         }
     }
 }
