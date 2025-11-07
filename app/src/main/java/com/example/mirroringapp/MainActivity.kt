@@ -8,6 +8,7 @@ import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.compose.foundation.layout.Arrangement
@@ -66,11 +67,12 @@ fun MirroringScreen(viewModel: MirroringViewModel) {
     val uiState by viewModel.uiState.collectAsState()
     val scope = rememberCoroutineScope()
     val projectionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
-        if (result.resultCode == Activity.RESULT_OK && result.data != null) {
-            val projectionData = result.data
-            scope.launch {
-                viewModel.startMirroring(result.resultCode, projectionData)
-            }
+        if (result.resultCode == Activity.RESULT_OK) {
+            result.data?.let { projectionData ->
+                scope.launch {
+                    viewModel.startMirroring(result.resultCode, projectionData)
+                }
+            } ?: viewModel.onProjectionDenied()
         } else {
             viewModel.onProjectionDenied()
         }
