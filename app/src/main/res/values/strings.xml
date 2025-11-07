@@ -1,0 +1,16 @@
+<resources>
+    <string name="app_name">MirroringApp</string>
+    <string name="start_mirroring">Start mirroring</string>
+    <string name="stop_mirroring">Stop mirroring</string>
+    <string name="usb_c_option">USB-C / DisplayPort Alt Mode</string>
+    <string name="wifi_direct_option">Wi-Fi Direct</string>
+    <string name="miracast_option">Miracast (Wi-Fi Display)</string>
+    <string name="latency_mode_title">Latency mode</string>
+    <string name="latency_mode_description">Choose the rendering mode that prioritizes speed or quality.</string>
+    <string name="enable_low_latency">Enable ultra-low latency</string>
+    <string name="use_hardware_encoder">Use hardware encoder when available</string>
+    <string name="external_display_connected">External display connected</string>
+    <string name="external_display_disconnected">External display disconnected</string>
+    <string name="request_projection_permission">Screen capture permission is required for mirroring.</string>
+    <string name="permission_denied">Permission denied</string>
+</resources>
