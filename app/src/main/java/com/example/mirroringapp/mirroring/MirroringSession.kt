@@ -8,6 +8,7 @@ import android.util.DisplayMetrics
 import android.view.Display
 import android.view.Surface
 import android.view.SurfaceHolder
+import com.example.mirroringapp.util.PersistentLogger
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -66,12 +67,16 @@ class MirroringSession(
                         UsbDisplayManager.UsbDisplayType.USB_ACCESSORY -> {
                             // USB Accessory - wait for display to initialize
                             Timber.i("⏳ USB Accessory detected - Waiting for display...")
-                            targetDisplay = usbDisplayManager.waitForExternalDisplay(5000)
+                            PersistentLogger.i("⏳ USB Accessory detected - Waiting up to 10 seconds for display...")
+                            targetDisplay = usbDisplayManager.waitForExternalDisplay(10000)
                             
                             if (targetDisplay != null) {
                                 Timber.i("✅ USB Accessory display ready")
+                                PersistentLogger.i("✅ USB Accessory display ready")
                             } else {
-                                Timber.w("⚠️ USB Accessory display not ready yet")
+                                Timber.e("❌ USB Accessory display not ready after 10 seconds")
+                                PersistentLogger.e("❌ USB Accessory display not ready after 10 seconds")
+                                PersistentLogger.e("This adapter (onebit/sagetech) may require the Sage Mirror app to create the display")
                             }
                         }
                         UsbDisplayManager.UsbDisplayType.UNKNOWN -> {

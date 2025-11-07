@@ -31,7 +31,7 @@ class WirelessDisplayScanner(private val context: Context) {
         context.getSystemService(Context.WIFI_SERVICE) as WifiManager
     }
     
-    private var channel: WifiP2pManager.Channel? = null
+    private var p2pChannel: WifiP2pManager.Channel? = null
     
     data class WirelessDevice(
         val name: String,
@@ -92,10 +92,10 @@ class WirelessDisplayScanner(private val context: Context) {
             return@callbackFlow
         }
         
-        // Initialize channel
-        channel = wifiP2pManager?.initialize(context, context.mainLooper, null)
+        // Initialize p2pChannel
+        p2pChannel = wifiP2pManager?.initialize(context, context.mainLooper, null)
         
-        if (channel == null) {
+        if (p2pChannel == null) {
             Timber.e("Failed to initialize WiFi P2P channel")
             PersistentLogger.e("Failed to initialize WiFi P2P channel")
             trySend(emptyList())
@@ -144,7 +144,7 @@ class WirelessDisplayScanner(private val context: Context) {
                     
                     WifiP2pManager.WIFI_P2P_PEERS_CHANGED_ACTION -> {
                         Timber.d("WiFi P2P peers changed - requesting peer list")
-                        wifiP2pManager?.requestPeers(channel, peerListListener)
+                        wifiP2pManager?.requestPeers(p2pChannel, peerListListener)
                     }
                     
                     WifiP2pManager.WIFI_P2P_DISCOVERY_CHANGED_ACTION -> {
@@ -167,7 +167,7 @@ class WirelessDisplayScanner(private val context: Context) {
         
         // Start discovery
         try {
-            wifiP2pManager?.discoverPeers(channel, object : WifiP2pManager.ActionListener {
+            wifiP2pManager?.discoverPeers(p2pChannel, object : WifiP2pManager.ActionListener {
                 override fun onSuccess() {
                     Timber.i("✅ WiFi Direct discovery started successfully")
                     PersistentLogger.i("✅ WiFi Direct discovery started successfully")
@@ -196,7 +196,7 @@ class WirelessDisplayScanner(private val context: Context) {
             PersistentLogger.i("Stopping WiFi Direct scan")
             try {
                 context.unregisterReceiver(receiver)
-                wifiP2pManager?.stopPeerDiscovery(channel, null)
+                wifiP2pManager?.stopPeerDiscovery(p2pChannel, null)
             } catch (e: Exception) {
                 Timber.e(e, "Error stopping WiFi Direct scan")
             }

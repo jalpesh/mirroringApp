@@ -81,6 +81,22 @@ class UsbDisplayManager(private val context: Context) {
             }
         }
         
+        // Check for known display adapters by manufacturer/model
+        val isKnownDisplayAdapter = usbAccessories?.any { accessory ->
+            val manufacturer = accessory.manufacturer?.lowercase() ?: ""
+            val model = accessory.model?.lowercase() ?: ""
+            val description = accessory.description?.lowercase() ?: ""
+            
+            // Known display adapter manufacturers/models
+            manufacturer.contains("onebit") ||
+            manufacturer.contains("displaylink") ||
+            manufacturer.contains("sagetech") ||
+            model.contains("mirror") ||
+            model.contains("display") ||
+            description.contains("mirror") ||
+            description.contains("display")
+        } ?: false
+        
         // Determine connection type
         val type = when {
             externalDisplay != null -> {
@@ -91,6 +107,11 @@ class UsbDisplayManager(private val context: Context) {
             hasUsbAccessory && hasHdmiConnection -> {
                 Timber.i("✅ USB Accessory with HDMI detected")
                 PersistentLogger.i("✅ USB Accessory with HDMI detected")
+                UsbDisplayType.USB_ACCESSORY
+            }
+            hasUsbAccessory && isKnownDisplayAdapter -> {
+                Timber.i("✅ Known display adapter detected (${usbAccessories?.firstOrNull()?.manufacturer})")
+                PersistentLogger.i("✅ Known display adapter detected - will wait for display")
                 UsbDisplayType.USB_ACCESSORY
             }
             hasUsbAccessory -> {
@@ -139,21 +160,35 @@ class UsbDisplayManager(private val context: Context) {
      * Wait for external display to appear (for USB accessories).
      * Some adapters take a moment to initialize.
      */
-    suspend fun waitForExternalDisplay(timeoutMs: Long = 3000): Display? {
+    suspend fun waitForExternalDisplay(timeoutMs: Long = 10000): Display? {
         val startTime = System.currentTimeMillis()
+        
+        Timber.i("Waiting for external display to appear (timeout: ${timeoutMs}ms)...")
+        PersistentLogger.i("Waiting for external display to appear (timeout: ${timeoutMs}ms)...")
         
         while (System.currentTimeMillis() - startTime < timeoutMs) {
             val display = getExternalDisplay()
             if (display != null) {
-                Timber.i("✅ External display appeared after ${System.currentTimeMillis() - startTime}ms")
-                PersistentLogger.i("✅ External display appeared after ${System.currentTimeMillis() - startTime}ms")
+                val elapsed = System.currentTimeMillis() - startTime
+                Timber.i("✅ External display appeared after ${elapsed}ms")
+                PersistentLogger.i("✅ External display appeared after ${elapsed}ms")
                 return display
             }
+            
+            // Log progress every 2 seconds
+            val elapsed = System.currentTimeMillis() - startTime
+            if (elapsed % 2000 < 100) {
+                Timber.d("Still waiting for display... (${elapsed}ms elapsed)")
+                PersistentLogger.i("Still waiting for display... (${elapsed}ms elapsed)")
+            }
+            
             kotlinx.coroutines.delay(100)
         }
         
-        Timber.w("⚠️ External display did not appear within ${timeoutMs}ms")
-        PersistentLogger.w("⚠️ External display did not appear within ${timeoutMs}ms")
+        Timber.e("❌ External display did not appear within ${timeoutMs}ms")
+        PersistentLogger.e("❌ External display did not appear within ${timeoutMs}ms")
+        Timber.e("This adapter may require a special app or driver to create the display")
+        PersistentLogger.e("This adapter may require a special app or driver to create the display")
         return null
     }
     
