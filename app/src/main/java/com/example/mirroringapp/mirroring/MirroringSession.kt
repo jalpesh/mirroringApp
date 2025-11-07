@@ -19,6 +19,7 @@ import android.view.Surface
 import com.example.mirroringapp.util.PerformanceLogger
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -32,7 +33,8 @@ class MirroringSession(
 ) {
 
     private val displayManager = context.getSystemService(DisplayManager::class.java)
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val scopeJob = SupervisorJob()
+    private val scope = CoroutineScope(scopeJob + Dispatchers.IO)
 
     private var virtualDisplay: VirtualDisplay? = null
     private var imageReader: ImageReader? = null
@@ -41,6 +43,7 @@ class MirroringSession(
     private var handlerThread: HandlerThread? = null
     private var videoEncoder: VideoEncoder? = null
     private var projectionStopped = false
+    private var cleanupJob: Job? = null
 
     private val performanceLogger = PerformanceLogger()
 
@@ -85,7 +88,9 @@ class MirroringSession(
     }
 
     fun stop() {
-        scope.launch {
+        if (cleanupJob != null) return
+
+        cleanupJob = scope.launch {
             releaseVirtualDisplay()
             releaseSurface()
             releaseVideoEncoder()
@@ -102,6 +107,10 @@ class MirroringSession(
                 projectionStopped = true
             }
             performanceLogger.reset()
+        }.also { job ->
+            job.invokeOnCompletion {
+                scopeJob.cancel()
+            }
         }
     }
 
