@@ -7,7 +7,6 @@ import android.media.projection.MediaProjection
 import android.util.DisplayMetrics
 import android.view.Display
 import android.view.Surface
-import android.view.SurfaceHolder
 import com.example.mirroringapp.util.PersistentLogger
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
