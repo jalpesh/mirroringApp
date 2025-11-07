@@ -176,17 +176,37 @@ class MirroringSession(
 
     private fun createVirtualDisplay(surface: Surface) {
         releaseVirtualDisplay()
-        val flags = buildVirtualDisplayFlags(connectionOption)
-        virtualDisplay = projection.createVirtualDisplay(
-            "MirroringSession",
-            targetWidth,
-            targetHeight,
-            targetDensity,
-            flags,
-            surface,
-            null,
-            null
-        )
+        val initialFlags = buildVirtualDisplayFlags(connectionOption)
+        virtualDisplay = try {
+            projection.createVirtualDisplay(
+                "MirroringSession",
+                targetWidth,
+                targetHeight,
+                targetDensity,
+                initialFlags,
+                surface,
+                null,
+                null
+            )
+        } catch (security: SecurityException) {
+            val needsFallback =
+                initialFlags and DisplayManager.VIRTUAL_DISPLAY_FLAG_TRUSTED != 0
+            if (needsFallback) {
+                Log.w(TAG, "Trusted flag rejected; retrying without it", security)
+                projection.createVirtualDisplay(
+                    "MirroringSession",
+                    targetWidth,
+                    targetHeight,
+                    targetDensity,
+                    buildVirtualDisplayFlags(connectionOption, includeTrustedFlag = false),
+                    surface,
+                    null,
+                    null
+                )
+            } else {
+                throw security
+            }
+        }
     }
 
     private fun releaseVirtualDisplay() {
@@ -211,12 +231,20 @@ class MirroringSession(
         }
     }
 
-    private fun buildVirtualDisplayFlags(option: ConnectionOption): Int {
+    private fun buildVirtualDisplayFlags(
+        option: ConnectionOption,
+        includeTrustedFlag: Boolean = true,
+    ): Int {
         var flags = DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR or DisplayManager.VIRTUAL_DISPLAY_FLAG_PRESENTATION
         if (option != ConnectionOption.USB_C) {
             flags = flags or DisplayManager.VIRTUAL_DISPLAY_FLAG_OWN_CONTENT_ONLY
         }
-        if (lowLatency && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && hasTrustedDisplayPermission()) {
+        if (
+            includeTrustedFlag &&
+            lowLatency &&
+            Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            hasTrustedDisplayPermission()
+        ) {
             flags = flags or DisplayManager.VIRTUAL_DISPLAY_FLAG_TRUSTED
         }
         return flags
