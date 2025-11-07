@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
@@ -110,9 +111,17 @@ fun MirroringScreen(viewModel: MirroringViewModel) {
         Spacer(modifier = Modifier.height(24.dp))
 
         ConnectionOption.values().forEach { option ->
-            Button(onClick = {
-                scope.launch { viewModel.setConnectionOption(option) }
-            }, modifier = Modifier.padding(vertical = 4.dp)) {
+            val isSelected = uiState.connectionOption == option
+            Button(
+                onClick = {
+                    scope.launch { viewModel.setConnectionOption(option) }
+                },
+                modifier = Modifier.padding(vertical = 4.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
+                    contentColor = if (isSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            ) {
                 Text(text = when (option) {
                     ConnectionOption.USB_C -> stringResource(id = R.string.usb_c_option)
                     ConnectionOption.WIFI_DIRECT -> stringResource(id = R.string.wifi_direct_option)

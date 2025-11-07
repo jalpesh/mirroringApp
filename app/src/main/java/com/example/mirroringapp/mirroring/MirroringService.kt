@@ -6,15 +6,20 @@ import android.app.NotificationManager
 import android.app.Service
 import android.content.Context
 import android.content.Intent
+import android.media.projection.MediaProjection
 import android.media.projection.MediaProjectionManager
 import android.os.Build
+import android.os.Handler
 import android.os.IBinder
+import android.os.Looper
 import androidx.core.app.NotificationCompat
 import com.example.mirroringapp.R
 
 class MirroringService : Service() {
 
     private var session: MirroringSession? = null
+    private var projectionCallback: MediaProjection.Callback? = null
+    private var activeProjection: MediaProjection? = null
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -51,7 +56,20 @@ class MirroringService : Service() {
 
         val projectionManager = getSystemService(MediaProjectionManager::class.java) ?: return
         val mediaProjection = projectionManager.getMediaProjection(resultCode, projectionData) ?: return
-        session?.stop()
+
+        if (session != null) {
+            stopMirroring()
+        }
+
+        val callback = object : MediaProjection.Callback() {
+            override fun onStop() {
+                stopMirroring()
+            }
+        }
+        mediaProjection.registerCallback(callback, Handler(Looper.getMainLooper()))
+        projectionCallback = callback
+        activeProjection = mediaProjection
+
         session = MirroringSession(
             context = this,
             projection = mediaProjection,
@@ -59,15 +77,19 @@ class MirroringService : Service() {
             lowLatency = lowLatency,
             hardwareEncoder = hardwareEncoder
         ).also { session ->
+            startForeground(NOTIFICATION_ID, buildNotification(connectionOption))
             session.start()
         }
-
-        startForeground(NOTIFICATION_ID, buildNotification(connectionOption))
     }
 
     private fun stopMirroring() {
         session?.stop()
         session = null
+        activeProjection?.let { projection ->
+            projectionCallback?.let { projection.unregisterCallback(it) }
+            projectionCallback = null
+            activeProjection = null
+        }
         stopForeground(STOP_FOREGROUND_REMOVE)
         stopSelf()
     }
