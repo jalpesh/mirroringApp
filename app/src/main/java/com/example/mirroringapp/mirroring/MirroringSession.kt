@@ -40,19 +40,71 @@ class MirroringSession(
     fun start() {
         scope.launch {
             try {
-                val metrics = context.resources.displayMetrics
-                val targetDisplay = pickDisplay(connectionOption)
+                Timber.d("=== MIRRORING SESSION START ===")
+                Timber.d("Connection Option: $connectionOption")
+                Timber.d("Low Latency: $lowLatency")
+                Timber.d("Hardware Encoder: $hardwareEncoder")
                 
-                if (targetDisplay == null && connectionOption == ConnectionOption.USB_C) {
-                    Timber.e("No external display found for USB-C connection")
-                    return@launch
+                val metrics = context.resources.displayMetrics
+                Timber.d("Phone Display: ${metrics.widthPixels}x${metrics.heightPixels}, density=${metrics.densityDpi}")
+                
+                // Use USB Display Manager for USB-C connections
+                var targetDisplay: Display? = null
+                
+                if (connectionOption == ConnectionOption.USB_C) {
+                    val usbDisplayManager = UsbDisplayManager(context)
+                    val usbInfo = usbDisplayManager.detectUsbDisplay()
+                    
+                    Timber.i(usbDisplayManager.getStatusMessage(usbInfo))
+                    
+                    when (usbInfo.type) {
+                        UsbDisplayManager.UsbDisplayType.DISPLAYPORT_ALT_MODE -> {
+                            // Direct DisplayPort - display already available
+                            targetDisplay = usbInfo.externalDisplay
+                            Timber.i("✅ Using DisplayPort Alt Mode - Direct rendering")
+                        }
+                        UsbDisplayManager.UsbDisplayType.USB_ACCESSORY -> {
+                            // USB Accessory - wait for display to initialize
+                            Timber.i("⏳ USB Accessory detected - Waiting for display...")
+                            targetDisplay = usbDisplayManager.waitForExternalDisplay(5000)
+                            
+                            if (targetDisplay != null) {
+                                Timber.i("✅ USB Accessory display ready")
+                            } else {
+                                Timber.w("⚠️ USB Accessory display not ready yet")
+                            }
+                        }
+                        UsbDisplayManager.UsbDisplayType.UNKNOWN -> {
+                            Timber.w("⚠️ USB connection detected but display not ready")
+                            // Try to get display anyway
+                            targetDisplay = usbDisplayManager.getExternalDisplay()
+                        }
+                        UsbDisplayManager.UsbDisplayType.NONE -> {
+                            Timber.e("❌ No USB display connection detected")
+                        }
+                    }
+                    
+                    if (targetDisplay == null) {
+                        Timber.e("❌ CRITICAL: No external display found for USB-C connection")
+                        Timber.e("USB-C mirroring requires an external display to be connected")
+                        Timber.e("Possible causes:")
+                        Timber.e("  1. Adapter not fully connected")
+                        Timber.e("  2. HDMI cable not plugged into TV")
+                        Timber.e("  3. TV not on or wrong HDMI input selected")
+                        Timber.e("  4. Adapter needs time to initialize (wait a few seconds)")
+                        return@launch
+                    }
+                } else {
+                    // Wireless connection - use phone display
+                    targetDisplay = pickDisplay(connectionOption)
                 }
                 
                 val width = targetDisplay?.mode?.physicalWidth ?: metrics.widthPixels
                 val height = targetDisplay?.mode?.physicalHeight ?: metrics.heightPixels
                 val density = targetDisplay?.let { DisplayMetrics.DENSITY_DEFAULT } ?: metrics.densityDpi
 
-                Timber.i("Starting mirroring: ${width}x${height}, connection=$connectionOption, lowLatency=$lowLatency, hwEncoder=$hardwareEncoder")
+                Timber.i("✅ Target Display Selected: ${width}x${height} @ ${density}dpi")
+                Timber.i("Starting mirroring: connection=$connectionOption, lowLatency=$lowLatency, hwEncoder=$hardwareEncoder")
 
                 // Choose rendering method based on connection type
                 when (connectionOption) {

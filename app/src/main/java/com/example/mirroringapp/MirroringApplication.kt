@@ -1,6 +1,7 @@
 package com.example.mirroringapp
 
 import android.app.Application
+import com.example.mirroringapp.util.PersistentLogger
 import dagger.hilt.android.HiltAndroidApp
 import timber.log.Timber
 
@@ -19,6 +20,10 @@ class MirroringApplication : Application() {
             Timber.plant(Timber.DebugTree())
         }
         
-        Timber.i("MirroringApplication initialized")
+        // Initialize persistent logger
+        PersistentLogger.initialize(this)
+        
+        Timber.i("MirroringApplication started")
+        PersistentLogger.i("Application initialized successfully")
     }
 }

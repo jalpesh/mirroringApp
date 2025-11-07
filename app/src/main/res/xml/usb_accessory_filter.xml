@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Generic USB accessory filter to handle USB-C display connections -->
+    <!-- This suppresses the "No installed apps work with this USB accessory" dialog -->
+    <usb-accessory
+        manufacturer=".*"
+        model=".*"
+        version=".*" />
+</resources>
