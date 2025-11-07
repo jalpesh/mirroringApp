@@ -29,12 +29,15 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.AlertDialog
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -71,6 +74,65 @@ fun MirroringScreen(viewModel: MirroringViewModel) {
     val scope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
     
+    // Permission state
+    var showPermissionDialog by remember { mutableStateOf(false) }
+    var permissionDeniedDialog by remember { mutableStateOf(false) }
+    var missingPermissions by remember { mutableStateOf<List<String>>(emptyList()) }
+    
+    // Multiple permissions launcher
+    val multiplePermissionsLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions()
+    ) { permissions ->
+        val allGranted = permissions.values.all { it }
+        if (!allGranted) {
+            val denied = permissions.filterValues { !it }.keys.toList()
+            missingPermissions = denied
+            permissionDeniedDialog = true
+        }
+    }
+    
+    // Check permissions on launch
+    LaunchedEffect(Unit) {
+        val requiredPermissions = getRequiredPermissions()
+        val missing = requiredPermissions.filter {
+            ContextCompat.checkSelfPermission(context, it) != PackageManager.PERMISSION_GRANTED
+        }
+        
+        if (missing.isNotEmpty()) {
+            missingPermissions = missing
+            showPermissionDialog = true
+        }
+    }
+    
+    // Permission request dialog
+    if (showPermissionDialog) {
+        PermissionRequestDialog(
+            permissions = missingPermissions,
+            onConfirm = {
+                showPermissionDialog = false
+                multiplePermissionsLauncher.launch(missingPermissions.toTypedArray())
+            },
+            onDismiss = {
+                showPermissionDialog = false
+                permissionDeniedDialog = true
+            }
+        )
+    }
+    
+    // Permission denied dialog
+    if (permissionDeniedDialog) {
+        PermissionDeniedDialog(
+            permissions = missingPermissions,
+            onOpenSettings = {
+                permissionDeniedDialog = false
+                openAppSettings(context)
+            },
+            onDismiss = {
+                permissionDeniedDialog = false
+            }
+        )
+    }
+    
     // Show error messages in snackbar
     LaunchedEffect(uiState) {
         if (uiState is MirroringUiState.Error) {
@@ -91,7 +153,9 @@ fun MirroringScreen(viewModel: MirroringViewModel) {
         }
     }
 
-    val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+    val foregroundServiceLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
         if (granted) {
             viewModel.requestProjectionPermission(projectionLauncher::launch)
         } else {
@@ -237,14 +301,31 @@ fun MirroringScreen(viewModel: MirroringViewModel) {
                 else -> {
                     Button(
                         onClick = {
-                            val permissionStatus = ContextCompat.checkSelfPermission(
-                                context,
-                                Manifest.permission.FOREGROUND_SERVICE
-                            )
-                            if (permissionStatus == PackageManager.PERMISSION_GRANTED || Build.VERSION.SDK_INT < Build.VERSION_CODES.P) {
-                                viewModel.requestProjectionPermission(projectionLauncher::launch)
+                            // Check if all required permissions are granted
+                            val allPermissionsGranted = getRequiredPermissions().all {
+                                ContextCompat.checkSelfPermission(context, it) == PackageManager.PERMISSION_GRANTED
+                            }
+                            
+                            if (!allPermissionsGranted) {
+                                val missing = getRequiredPermissions().filter {
+                                    ContextCompat.checkSelfPermission(context, it) != PackageManager.PERMISSION_GRANTED
+                                }
+                                missingPermissions = missing
+                                showPermissionDialog = true
                             } else {
-                                permissionLauncher.launch(Manifest.permission.FOREGROUND_SERVICE)
+                                // Check foreground service permission separately (Android 9+)
+                                val foregroundServiceGranted = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                                    ContextCompat.checkSelfPermission(
+                                        context,
+                                        Manifest.permission.FOREGROUND_SERVICE
+                                    ) == PackageManager.PERMISSION_GRANTED
+                                } else true
+                                
+                                if (foregroundServiceGranted) {
+                                    viewModel.requestProjectionPermission(projectionLauncher::launch)
+                                } else {
+                                    foregroundServiceLauncher.launch(Manifest.permission.FOREGROUND_SERVICE)
+                                }
                             }
                         },
                         modifier = Modifier
@@ -264,5 +345,128 @@ fun MirroringScreen(viewModel: MirroringViewModel) {
             hostState = snackbarHostState,
             modifier = Modifier.padding(16.dp)
         )
+    }
+}
+
+// Helper function to get required permissions
+private fun getRequiredPermissions(): List<String> {
+    val permissions = mutableListOf(
+        Manifest.permission.INTERNET,
+        Manifest.permission.ACCESS_WIFI_STATE,
+        Manifest.permission.CHANGE_WIFI_STATE,
+        Manifest.permission.ACCESS_NETWORK_STATE
+    )
+    
+    // Add FOREGROUND_SERVICE_MEDIA_PROJECTION for Android 10+
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+        permissions.add(Manifest.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION)
+    }
+    
+    // Add POST_NOTIFICATIONS for Android 13+
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+        permissions.add(Manifest.permission.POST_NOTIFICATIONS)
+    }
+    
+    return permissions
+}
+
+// Helper function to open app settings
+private fun openAppSettings(context: android.content.Context) {
+    val intent = android.content.Intent(
+        android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+        android.net.Uri.fromParts("package", context.packageName, null)
+    )
+    intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+    context.startActivity(intent)
+}
+
+// Permission request dialog
+@Composable
+private fun PermissionRequestDialog(
+    permissions: List<String>,
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Permissions Required") },
+        text = {
+            Column {
+                Text("This app needs the following permissions to function properly:")
+                Spacer(modifier = Modifier.height(12.dp))
+                permissions.forEach { permission ->
+                    Text(
+                        text = "• ${getPermissionDescription(permission)}",
+                        style = MaterialTheme.typography.bodyMedium,
+                        modifier = Modifier.padding(vertical = 4.dp)
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            Button(onClick = onConfirm) {
+                Text("Grant Permissions")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancel")
+            }
+        }
+    )
+}
+
+// Permission denied dialog
+@Composable
+private fun PermissionDeniedDialog(
+    permissions: List<String>,
+    onOpenSettings: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Permissions Denied") },
+        text = {
+            Column {
+                Text("The following permissions are required for the app to work:")
+                Spacer(modifier = Modifier.height(12.dp))
+                permissions.forEach { permission ->
+                    Text(
+                        text = "• ${getPermissionDescription(permission)}",
+                        style = MaterialTheme.typography.bodyMedium,
+                        modifier = Modifier.padding(vertical = 4.dp)
+                    )
+                }
+                Spacer(modifier = Modifier.height(12.dp))
+                Text(
+                    "Please grant these permissions in Settings to use the app.",
+                    style = MaterialTheme.typography.bodySmall
+                )
+            }
+        },
+        confirmButton = {
+            Button(onClick = onOpenSettings) {
+                Text("Open Settings")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancel")
+            }
+        }
+    )
+}
+
+// Get user-friendly permission descriptions
+private fun getPermissionDescription(permission: String): String {
+    return when (permission) {
+        Manifest.permission.INTERNET -> "Internet access for wireless mirroring"
+        Manifest.permission.ACCESS_WIFI_STATE -> "Check WiFi connection status"
+        Manifest.permission.CHANGE_WIFI_STATE -> "Manage WiFi connections"
+        Manifest.permission.ACCESS_NETWORK_STATE -> "Check network connectivity"
+        Manifest.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION -> "Screen capture service"
+        Manifest.permission.POST_NOTIFICATIONS -> "Show mirroring notifications"
+        Manifest.permission.FOREGROUND_SERVICE -> "Run mirroring in background"
+        else -> permission.substringAfterLast(".")
     }
 }
