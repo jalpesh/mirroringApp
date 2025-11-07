@@ -9,18 +9,12 @@ import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.launch
 
 private val Application.settingsDataStore by preferencesDataStore(name = "mirroring_settings")
 
 class MirroringController(private val app: Application) {
-
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     private val projectionFactory = MirroringIntentFactory(app)
 
@@ -71,23 +65,19 @@ class MirroringController(private val app: Application) {
     }
 
     suspend fun startMirroring(resultCode: Int, data: Intent) {
-        scope.launch {
-            val serviceIntent = MirroringService.createStartIntent(
-                context = app,
-                resultCode = resultCode,
-                projectionData = data,
-                connectionOption = getSelectedConnection(),
-                lowLatency = isLowLatencyEnabled(),
-                hardwareEncoder = isHardwareEncoderEnabled()
-            )
-            app.startForegroundServiceCompat(serviceIntent)
-        }
+        val serviceIntent = MirroringService.createStartIntent(
+            context = app,
+            resultCode = resultCode,
+            projectionData = data,
+            connectionOption = getSelectedConnection(),
+            lowLatency = isLowLatencyEnabled(),
+            hardwareEncoder = isHardwareEncoderEnabled()
+        )
+        app.startForegroundServiceCompat(serviceIntent)
     }
 
     suspend fun stopMirroring() {
-        scope.launch {
-            app.stopService(MirroringService.createStopIntent(app))
-        }
+        app.stopService(MirroringService.createStopIntent(app))
     }
 
     private fun Context.startForegroundServiceCompat(intent: Intent) {
