@@ -42,6 +42,7 @@ class MainActivity : ComponentActivity() {
         MirroringViewModel.Factory(application)
     }
 
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
