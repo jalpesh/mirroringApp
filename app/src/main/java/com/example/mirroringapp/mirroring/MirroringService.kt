@@ -49,8 +49,8 @@ class MirroringService : Service() {
         val lowLatency = intent.getBooleanExtra(EXTRA_LOW_LATENCY, true)
         val hardwareEncoder = intent.getBooleanExtra(EXTRA_HARDWARE_ENCODER, true)
 
-        val projectionManager = getSystemService(MediaProjectionManager::class.java)
-        val mediaProjection = projectionManager.getMediaProjection(resultCode, projectionData)
+        val projectionManager = getSystemService(MediaProjectionManager::class.java) ?: return
+        val mediaProjection = projectionManager.getMediaProjection(resultCode, projectionData) ?: return
         session?.stop()
         session = MirroringSession(
             context = this,

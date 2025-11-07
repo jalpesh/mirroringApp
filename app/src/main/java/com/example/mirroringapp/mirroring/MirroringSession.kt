@@ -11,6 +11,7 @@ import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.util.DisplayMetrics
+import android.view.Display
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
