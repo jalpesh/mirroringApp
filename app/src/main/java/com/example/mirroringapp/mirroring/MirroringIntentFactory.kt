@@ -12,10 +12,6 @@ class MirroringIntentFactory(private val app: Application) {
         app.getSystemService(MediaProjectionManager::class.java)
 
     fun createProjectionIntent(): Intent? {
-        return projectionManager?.createScreenCaptureIntent()?.apply {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-                putExtra(MediaProjectionManager.EXTRA_MEDIA_PROJECTION_SOURCE, MediaProjectionManager.PROJECTION_SOURCE_SCREEN)
-            }
-        }
+        return projectionManager?.createScreenCaptureIntent()
     }
 }
