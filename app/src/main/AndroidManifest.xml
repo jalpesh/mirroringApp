@@ -39,7 +39,8 @@
 
         <receiver
             android:name="com.example.mirroringapp.mirroring.ExternalDisplayReceiver"
-            android:enabled="true">
+            android:enabled="true"
+            android:exported="true">
             <intent-filter>
                 <action android:name="android.hardware.display.action.WIFI_DISPLAY_STATUS_CHANGED" />
             </intent-filter>
